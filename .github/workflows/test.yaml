@@ -17,4 +17,7 @@ jobs:
         with:
           submodules: true
       - name: Build Base Tools
-        run: make -C edk2/BaseTools
+        run: |
+          git submodule update --init
+          (cd edk2 && git submodule update --init -- BaseTools/Source/C/BrotliCompress/brotli)
+          make -C edk2/BaseTools
