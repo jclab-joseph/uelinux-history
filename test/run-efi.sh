@@ -16,6 +16,7 @@ fallocate -l 32M ${WORK_DIR}/efiboot.img || dd if=/dev/zero of=${WORK_DIR}/efibo
 mkfs.vfat ${WORK_DIR}/efiboot.img
 mmd -i ${WORK_DIR}/efiboot.img EFI EFI/BOOT
 mcopy -vi ${WORK_DIR}/efiboot.img ${SCRIPT_DIR}/bzImage ::EFI/BOOT/KERNEL.EFI
+mcopy -vi ${WORK_DIR}/efiboot.img ${SCRIPT_DIR}/initramfs.cpio ::EFI/BOOT/INITRD.CPIO
 mcopy -vi ${WORK_DIR}/efiboot.img ${EFI_FILE} ::EFI/BOOT/BOOTX64.EFI
 
 ${SCRIPT_DIR}/run-qemu.sh -drive if=virtio,file=${WORK_DIR}/efiboot.img,format=raw,readonly=off "$@"

@@ -1,0 +1,17 @@
+debian/qemu-ifup etc/
+debian/qemu-ifdown etc/
+
+usr/share/qemu/trace-events-all
+usr/bin/qemu-pr-helper
+
+# linux-specific
+usr/lib/qemu/qemu-bridge-helper
+usr/lib/qemu/virtfs-proxy-helper
+
+# common modules. gui modules has been moved into place in d/rules.
+usr/lib/${DEB_HOST_MULTIARCH}/qemu/accel-tcg-*.so
+usr/lib/${DEB_HOST_MULTIARCH}/qemu/audio-*.so
+usr/lib/${DEB_HOST_MULTIARCH}/qemu/chardev-*.so
+usr/lib/${DEB_HOST_MULTIARCH}/qemu/hw-*.so
+usr/lib/${DEB_HOST_MULTIARCH}/qemu/ui-*.so
+debian/qemu-kvm-init /usr/share/qemu/init

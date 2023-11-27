@@ -1,0 +1,6 @@
+# from source tree
+qga/qapi-schema.json /usr/share/doc/qemu-guest-agent/
+scripts/qemu-guest-agent/fsfreeze-hook /etc/qemu/
+
+# from staging area
+usr/bin/qemu-ga /usr/sbin/

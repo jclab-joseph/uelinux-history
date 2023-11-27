@@ -1,0 +1,100 @@
+From: Steffen Eiden <seiden@linux.ibm.com>
+Date: Wed, 23 Aug 2023 16:22:18 +0200
+Subject: target/s390x/kvm: Refactor AP functionalities
+
+kvm_s390_set_attr() is a misleading name as it only sets attributes for
+the KVM_S390_VM_CRYPTO group. Therefore, rename it to
+kvm_s390_set_crypto_attr().
+
+Add new functions ap_available() and ap_enabled() to avoid code
+duplication later.
+
+Reviewed-by: Thomas Huth <thuth@redhat.com>
+Reviewed-by: Michael Mueller <mimu@linux.ibm.com>
+Signed-off-by: Steffen Eiden <seiden@linux.ibm.com>
+Message-ID: <20230823142219.1046522-5-seiden@linux.ibm.com>
+Signed-off-by: Thomas Huth <thuth@redhat.com>
+
+Origin: upstream, https://gitlab.com/qemu-project/qemu/-/commit/354383c122
+Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/qemu/+bug/2003673
+---
+ target/s390x/kvm/kvm.c | 24 +++++++++++++++++-------
+ 1 file changed, 17 insertions(+), 7 deletions(-)
+
+diff --git a/target/s390x/kvm/kvm.c b/target/s390x/kvm/kvm.c
+index 3ac7ec9..d973768 100644
+--- a/target/s390x/kvm/kvm.c
++++ b/target/s390x/kvm/kvm.c
+@@ -250,7 +250,7 @@ static void kvm_s390_enable_cmma(void)
+     trace_kvm_enable_cmma(rc);
+ }
+ 
+-static void kvm_s390_set_attr(uint64_t attr)
++static void kvm_s390_set_crypto_attr(uint64_t attr)
+ {
+     struct kvm_device_attr attribute = {
+         .group = KVM_S390_VM_CRYPTO,
+@@ -275,7 +275,7 @@ static void kvm_s390_init_aes_kw(void)
+     }
+ 
+     if (kvm_vm_check_attr(kvm_state, KVM_S390_VM_CRYPTO, attr)) {
+-            kvm_s390_set_attr(attr);
++            kvm_s390_set_crypto_attr(attr);
+     }
+ }
+ 
+@@ -289,7 +289,7 @@ static void kvm_s390_init_dea_kw(void)
+     }
+ 
+     if (kvm_vm_check_attr(kvm_state, KVM_S390_VM_CRYPTO, attr)) {
+-            kvm_s390_set_attr(attr);
++            kvm_s390_set_crypto_attr(attr);
+     }
+ }
+ 
+@@ -2296,6 +2296,17 @@ static int configure_cpu_subfunc(const S390FeatBitmap features)
+     return kvm_vm_ioctl(kvm_state, KVM_SET_DEVICE_ATTR, &attr);
+ }
+ 
++static bool ap_available(void)
++{
++    return kvm_vm_check_attr(kvm_state, KVM_S390_VM_CRYPTO,
++                             KVM_S390_VM_CRYPTO_ENABLE_APIE);
++}
++
++static bool ap_enabled(const S390FeatBitmap features)
++{
++    return test_bit(S390_FEAT_AP, features);
++}
++
+ static int kvm_to_feat[][2] = {
+     { KVM_S390_VM_CPU_FEAT_ESOP, S390_FEAT_ESOP },
+     { KVM_S390_VM_CPU_FEAT_SIEF2, S390_FEAT_SIE_F2 },
+@@ -2475,8 +2486,7 @@ void kvm_s390_get_host_cpu_model(S390CPUModel *model, Error **errp)
+         return;
+     }
+     /* for now, we can only provide the AP feature with HW support */
+-    if (kvm_vm_check_attr(kvm_state, KVM_S390_VM_CRYPTO,
+-        KVM_S390_VM_CRYPTO_ENABLE_APIE)) {
++    if (ap_available()) {
+         set_bit(S390_FEAT_AP, model->features);
+     }
+ 
+@@ -2502,7 +2512,7 @@ static void kvm_s390_configure_apie(bool interpret)
+                                 KVM_S390_VM_CRYPTO_DISABLE_APIE;
+ 
+     if (kvm_vm_check_attr(kvm_state, KVM_S390_VM_CRYPTO, attr)) {
+-        kvm_s390_set_attr(attr);
++        kvm_s390_set_crypto_attr(attr);
+     }
+ }
+ 
+@@ -2556,7 +2566,7 @@ void kvm_s390_apply_cpu_model(const S390CPUModel *model, Error **errp)
+         kvm_s390_enable_cmma();
+     }
+ 
+-    if (test_bit(S390_FEAT_AP, model->features)) {
++    if (ap_enabled(model->features)) {
+         kvm_s390_configure_apie(true);
+     }
+ }
