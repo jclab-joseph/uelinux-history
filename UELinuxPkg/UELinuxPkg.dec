@@ -1,0 +1,18 @@
+[Defines]
+  DEC_SPECIFICATION              = 0x00010005
+  PACKAGE_NAME                   = UELinuxPkg
+  PACKAGE_GUID                   = 31F546FC-3CBD-429E-B3C2-97736FD5A4DB
+  PACKAGE_VERSION                = 0.01
+
+[LibraryClasses]
+  BaseLib|MdePkg/Library/BaseLib/BaseLib.inf
+  RegisterFilterLib|MdePkg/Library/RegisterFilterLibNull/RegisterFilterLibNull.inf
+  BaseMemoryLib|MdePkg/Library/BaseMemoryLib/BaseMemoryLib.inf
+  DebugLib|MdePkg/Library/BaseDebugLibNull/BaseDebugLibNull.inf
+  UefiBootServicesTableLib|MdePkg/Library/UefiBootServicesTableLib/UefiBootServicesTableLib.inf
+  UefiLib|MdePkg/Library/UefiLib/UefiLib.inf
+  IoLib|MdePkg/Library/BaseIoLibIntrinsic/BaseIoLibIntrinsic.inf
+  HobLib|MdePkg/Library/DxeHobLib/DxeHobLib.inf
+  TimerLib|MdePkg/Library/BaseTimerLibNullTemplate/BaseTimerLibNullTemplate.inf
+
+[Guids]

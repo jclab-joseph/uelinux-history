@@ -1,0 +1,38 @@
+[Defines]
+  INF_VERSION                    = 0x00010006
+  BASE_NAME                      = UELinuxLoader
+  FILE_GUID                      = 3738DDE3-F3A4-45b5-8B52-C7432F31252D
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 0.1
+  ENTRY_POINT                    = LoaderMain
+
+#
+#  VALID_ARCHITECTURES           = IA32 X64 IPF
+#
+
+[Sources]
+  main.c
+  kernel_loader.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  UELinuxPkg/UELinuxPkg.dec
+
+[LibraryClasses]
+  UefiApplicationEntryPoint
+  UefiLib
+  DebugLib
+  TimerLib
+  PeCoffLib
+  CacheMaintenanceLib
+
+[Guids]
+ gEfiFileInfoGuid
+
+[Protocols]
+ gEfiDiskIo2ProtocolGuid
+ gEfiBlockIo2ProtocolGuid
+ gEfiBlockIoProtocolGuid
+ gEfiMpServiceProtocolGuid
+ gEfiLoadedImageProtocolGuid
+ gEfiSimpleFileSystemProtocolGuid
