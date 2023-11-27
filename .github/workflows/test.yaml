@@ -11,7 +11,7 @@ jobs:
       - name: Install apt dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y tar git make gcc qemu-system-x86
+          sudo apt-get install -y tar git make gcc nasm mtools qemu-system-x86
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -19,7 +19,7 @@ jobs:
       - name: Build Base Tools
         run: |
           git submodule update --init
-          (cd edk2 && git submodule update --init -- BaseTools/Source/C/BrotliCompress/brotli)
+          (cd edk2 && git submodule update --init -- BaseTools/Source/C/BrotliCompress/brotli/ MdePkg/Library/MipiSysTLib/mipisyst/)
           make -C edk2/BaseTools
 
       - name: Test in qemu
