@@ -6,7 +6,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+        with:
+          lfs: true
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
       - run: mkdir -p output
@@ -23,7 +25,7 @@ jobs:
       - name: Build
         run: |
           mkdir -p output
-        docker run --rm -it -v $PWD/output:/work/output local/builder:latest /bin/sh -c 'dpkg-buildpackage -d -uc -us && cd /work && cp -rf qemu-*.*deb qemu_8.0.4+dfsg-1ubuntu5.dsc qemu_8.0.4+dfsg-1ubuntu5_amd64.buildinfo qemu_8.0.4+dfsg-1ubuntu5_amd64.changes /work/output'
+          docker run --rm -v $PWD/output:/work/output local/builder:latest /bin/sh -c 'dpkg-buildpackage -d -uc -us && cd /work && cp -rf qemu-*.*deb qemu_8.0.4+dfsg-1ubuntu5.dsc qemu_8.0.4+dfsg-1ubuntu5_amd64.buildinfo qemu_8.0.4+dfsg-1ubuntu5_amd64.changes /work/output'
       - uses: actions/upload-artifact@v3
         with:
           path: |
