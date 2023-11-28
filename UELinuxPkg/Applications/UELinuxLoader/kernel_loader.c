@@ -341,7 +341,7 @@ EFI_STATUS StartImage() {
 
     CHAR16 *cmdline = CatSPrint(
             NULL,
-            L"nosmp earlyprintk=serial,ttyS1,115200 console=tty0 console=ttyS1,115200 acpi=off memmap=exactmap,128K@0M,%luM@%luM",
+            L"nosmp earlyprintk=serial,ttyS1,115200 console=tty0 console=ttyS1,115200 acpi=off add_efi_memmap memmap=exactmap,128K@0M,%luM@%luM",
             linux_size >> 20,
             linux_addr >> 20
     );
