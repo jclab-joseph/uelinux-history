@@ -12,7 +12,11 @@
 
 [Sources]
   main.c
+  initrd.c
   kernel_loader.c
+  proxy_handler.c
+  proxy_stub.c
+  proxy_bootservices_stub.c
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -25,9 +29,11 @@
   TimerLib
   PeCoffLib
   CacheMaintenanceLib
+  SynchronizationLib
 
 [Guids]
  gEfiFileInfoGuid
+ gLinuxEfiInitrdMediaGuid
 
 [Protocols]
  gEfiDiskIo2ProtocolGuid
@@ -36,3 +42,7 @@
  gEfiMpServiceProtocolGuid
  gEfiLoadedImageProtocolGuid
  gEfiSimpleFileSystemProtocolGuid
+ gEfiLoadFile2ProtocolGuid
+
+[BuildOptions]
+  GCC:*_*_*_CC_FLAGS = -Wno-error=int-to-pointer-cast
