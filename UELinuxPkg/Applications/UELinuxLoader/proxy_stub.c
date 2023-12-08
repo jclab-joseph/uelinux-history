@@ -64,6 +64,9 @@ EFI_STATUS ProxyCreateStub(EFI_SYSTEM_TABLE **out_system_table_stub) {
     system_table_stub->ConsoleInHandle = gST->ConsoleInHandle;
     system_table_stub->ConsoleOutHandle = gST->ConsoleOutHandle;
     system_table_stub->StandardErrorHandle = gST->StandardErrorHandle;
+    system_table_stub->ConIn = gST->ConIn;
+    system_table_stub->ConOut = gST->ConOut;
+    system_table_stub->StdErr = gST->StdErr;
     system_table_stub->RuntimeServices = gST->RuntimeServices;
     system_table_stub->NumberOfTableEntries = gST->NumberOfTableEntries;
     system_table_stub->ConfigurationTable = gST->ConfigurationTable;
@@ -107,7 +110,7 @@ VOID ProxyTaskTransfer(PROXY_TASK *task) {
                 CpuPause();
             }
         } else {
-            m_proxy_server.task_queue[m_proxy_server.task_rear] = 0;
+            m_proxy_server.task_queue[m_proxy_server.task_rear] = task;
             m_proxy_server.task_rear = next_rear;
             ReleaseSpinLock(&m_proxy_server.task_lock);
             break;
