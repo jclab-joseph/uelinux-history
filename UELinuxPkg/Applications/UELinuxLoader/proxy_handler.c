@@ -1,4 +1,5 @@
 #include <Uefi.h>
+#include <Library/DebugLib.h>
 #include <Library/SynchronizationLib.h>
 #include <Library/BaseMemoryLib.h>
 
@@ -19,6 +20,7 @@ typedef VOID* (EFIAPI* fnTemplateArg9)(VOID*, VOID*, VOID*, VOID*, VOID*, VOID*,
 typedef VOID* (EFIAPI* fnTemplateArg10)(VOID*, VOID*, VOID*, VOID*, VOID*, VOID*, VOID*, VOID*, VOID*, VOID*);
 
 static VOID *ProxyTaskExecute(PROXY_TASK* task) {
+    ASSERT(task->fn != NULL);
     switch (task->arg_n) {
         case 0:
             return ((fnTemplateArg0) task->fn)();
@@ -59,18 +61,23 @@ BOOLEAN ProxyHandle() {
     if (m_proxy_server.task_front != m_proxy_server.task_rear) {
         // has task
         task = m_proxy_server.task_queue[m_proxy_server.task_front];
+        m_proxy_server.task_front = (m_proxy_server.task_front + 1) % PROXY_TASK_QUEUE_SIZE;
     }
     ReleaseSpinLock(&m_proxy_server.task_lock);
 
     if (task) {
+        if (task->status != kProxyTaskWaiting) {
+            DEBUG((DEBUG_INFO, "status = %d\n", task->status));
+            ASSERT(task->status == kProxyTaskWaiting);
+        }
         task->status = kProxyTaskProcessing;
         task->ret = ProxyTaskExecute(task);
         task->status = kProxyTaskFinished;
     }
 
-    AcquireSpinLock(&m_proxy_server.task_lock);
-    m_proxy_server.task_front = (m_proxy_server.task_front + 1) % PROXY_TASK_QUEUE_SIZE;
-    ReleaseSpinLock(&m_proxy_server.task_lock);
+    // AcquireSpinLock(&m_proxy_server.task_lock);
+    // m_proxy_server.task_front = (m_proxy_server.task_front + 1) % PROXY_TASK_QUEUE_SIZE;
+    // ReleaseSpinLock(&m_proxy_server.task_lock);
 
     return task != NULL;
 }
