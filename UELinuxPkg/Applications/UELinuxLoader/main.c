@@ -91,6 +91,7 @@ EFI_STATUS EFIAPI LoaderMain(
     }
 
     DumpCpus();
+
     status = StartImage();
     if (EFI_ERROR(status)) {
         return status;

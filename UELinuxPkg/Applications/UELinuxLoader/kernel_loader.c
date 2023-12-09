@@ -10,6 +10,7 @@
 #include <Protocol/BlockIo.h>
 #include <Protocol/SimpleFileSystem.h>
 #include <Protocol/LoadedImage.h>
+#include <Protocol/LoadFile2.h>
 #include <Guid/FileInfo.h>
 #include <Pi/PiMultiPhase.h>
 #include <Protocol/MpService.h>
@@ -17,7 +18,11 @@
 #include <Library/PeCoffLib.h>
 #include <Library/CacheMaintenanceLib.h>
 
+#include "proxy.h"
+
 #define LOADED_KERNEL_CONTEXT_SIGNATURE SIGNATURE_32('u','e','l','k')
+
+EFI_MEMORY_TYPE pool_type = EfiLoaderData;
 
 typedef struct {
     UINTN Signature;
@@ -25,6 +30,7 @@ typedef struct {
     UINTN SourceSize;
 
     EFI_HANDLE loaded_image_handle;
+    EFI_LOADED_IMAGE_PROTOCOL* loaded_image_protocol;
     EFI_IMAGE_ENTRY_POINT entrypoint;
 } LOADED_KERNEL_CONTEXT;
 
@@ -49,7 +55,7 @@ VOID EFIAPI LinuxProcessorEntry(VOID *parameter) {
 
     orig_exit_boot_services = gBS->ExitBootServices;
     gBS->ExitBootServices = HookedExitBootServices;
-    status = ctx->entrypoint(ctx->loaded_image_handle, gST);
+    status = ctx->entrypoint(ctx->loaded_image_handle, ctx->loaded_image_protocol->SystemTable);
     gBS->ExitBootServices = orig_exit_boot_services;
     if (EFI_ERROR(status)) {
         DEBUG((DEBUG_INFO, "***** Entry Point Failed ***** 0x%p\n", status));
@@ -107,20 +113,29 @@ HookedExitBootServices(
     return EFI_SUCCESS;
 }
 
-EFI_STATUS StartImage() {
+
+EFI_STATUS RegisterInitrd(
+        VOID *initrd_buffer,
+        UINTN initrd_size,
+        EFI_HANDLE *phandle
+);
+
+//INITRD.CPIO
+
+EFI_STATUS ReadFile(
+        CHAR16* filename,
+        EFI_DEVICE_PATH_PROTOCOL **out_file_device_path,
+        unsigned char** out_buffer,
+        UINTN *out_file_size,
+        EFI_MEMORY_TYPE memory_type
+) {
     EFI_STATUS status;
-    const CHAR16 *kernel_file = L"KERNEL.EFI";
-    CHAR16 *kernel_path;
+    CHAR16* full_path = NULL;
     EFI_FILE_PROTOCOL *root;
     EFI_FILE_PROTOCOL *file;
     EFI_FILE_INFO *file_info = NULL;
     UINTN buffer_size;
-    EFI_DEVICE_PATH *file_device_path;
     unsigned char *file_buffer;
-    UINTN file_size;
-    EFI_HANDLE image_handle;
-    EFI_LOADED_IMAGE_PROTOCOL *loaded_image;
-    EFI_EVENT processor_event;
 
     CHAR16 *self_path = ConvertDevicePathToText(loader_li->FilePath, FALSE, FALSE);
     UINTN path_len = StrLen(self_path);
@@ -130,66 +145,70 @@ EFI_STATUS StartImage() {
         self_path[path_len] = 0;
     }
 
-    status = gBS->AllocatePool(EfiBootServicesData, (path_len + StrLen(kernel_file) + 1) * sizeof(CHAR16),
-                               (VOID **) &kernel_path);
+    status = gBS->AllocatePool(
+            EfiBootServicesData,
+            (path_len + StrLen(filename) + 1) * sizeof(CHAR16),
+            (VOID **) &full_path);
     if (EFI_ERROR(status)) {
         Print(L"AllocatePool failed: 0x%x\n", status);
-        return status;
+        goto done;
     }
 
-    StrCpyS(kernel_path, path_len + 1, self_path);
-    StrCpyS(kernel_path + path_len, StrLen(kernel_file) + 1, kernel_file);
+    StrCpyS(full_path, path_len + 1, self_path);
+    StrCpyS(full_path + path_len, StrLen(filename) + 1, filename);
 
-    Print(L"kernel_path : %s\n", kernel_path);
+    Print(L"filename : %s\n", full_path);
 
-    file_device_path = FileDevicePath(loader_li->DeviceHandle, kernel_path);
-    if (!file_device_path) {
-        Print(L"FileDevicePath failed: 0x%x\n", status);
-        return 1;
+    if (out_file_device_path) {
+        *out_file_device_path = FileDevicePath(loader_li->DeviceHandle, full_path);
+        if (!*out_file_device_path) {
+            Print(L"FileDevicePath failed\n");
+            status = 1;
+            goto done;
+        }
     }
 
     status = current_fs->OpenVolume(current_fs, &root);
     if (EFI_ERROR(status)) {
         Print(L"OpenVolume failed: 0x%x\n", status);
-        return status;
+        goto done;
     }
 
-    status = root->Open(root, &file, kernel_path, EFI_FILE_MODE_READ, 0);
+    status = root->Open(root, &file, full_path, EFI_FILE_MODE_READ, 0);
     if (EFI_ERROR(status)) {
         Print(L"OpenFile failed: 0x%x\n", status);
-        return status;
+        goto done;
     }
 
     buffer_size = sizeof(file_info);
-    status = gBS->AllocatePool(EfiBootServicesCode, buffer_size, (VOID **) &file_info);
+    status = gBS->AllocatePool(EfiBootServicesData, buffer_size, (VOID **) &file_info);
     if (EFI_ERROR(status)) {
         Print(L"AllocatePool failed: 0x%x\n", status);
-        return status;
+        goto done;
     }
 
     status = file->GetInfo(file, &gEfiFileInfoGuid, &buffer_size, file_info);
     if (status == EFI_BUFFER_TOO_SMALL) {
         gBS->FreePool(file_info);
-        status = gBS->AllocatePool(EfiBootServicesCode, buffer_size, (VOID **) &file_info);
+        status = gBS->AllocatePool(pool_type, buffer_size, (VOID **) &file_info);
         if (EFI_ERROR(status)) {
             Print(L"AllocatePool failed: 0x%x\n", status);
-            return status;
+            goto done;
         }
         status = file->GetInfo(file, &gEfiFileInfoGuid, &buffer_size, file_info);
     }
     if (EFI_ERROR(status)) {
         Print(L"GetInfo failed: 0x%x\n", status);
-        return status;
+        goto done;
     }
 
-    file_size = file_info->FileSize;
-    status = gBS->AllocatePool(EfiBootServicesCode, file_size, (VOID **) &file_buffer);
+    status = gBS->AllocatePool(memory_type, file_info->FileSize, (VOID **) &file_buffer);
     if (EFI_ERROR(status)) {
         Print(L"AllocatePool failed: 0x%x\n", status);
         return status;
     }
 
-    buffer_size = file_size;
+    buffer_size = file_info->FileSize;
     status = file->Read(file, &buffer_size, (VOID *) file_buffer);
     if (EFI_ERROR(status)) {
         Print(L"FileRead failed: 0x%x\n", status);
@@ -197,18 +216,55 @@ EFI_STATUS StartImage() {
     }
     Print(L"KERNEL READ : %u bytes\n", buffer_size);
 
+    *out_buffer = file_buffer;
+    *out_file_size = file_info->FileSize;
+
     file->Close(file);
 
-    CHAR16 *temp = ConvertDevicePathToText(file_device_path, TRUE, FALSE);
+done:
+    if (full_path) {
+        gBS->FreePool(full_path);
+    }
+    return status;
+}
+
+EFI_STATUS StartImage() {
+    EFI_STATUS status;
+    EFI_HANDLE kernel_image_handle;
+    EFI_LOADED_IMAGE_PROTOCOL *loaded_image;
+    EFI_EVENT processor_event;
+
+    EFI_DEVICE_PATH_PROTOCOL* kernel_device_path = NULL;
+    unsigned char* kernel_buffer = NULL;
+    UINTN kernel_size = 0;
+
+    EFI_DEVICE_PATH_PROTOCOL* initrd_device_path = NULL;
+    unsigned char* initrd_buffer = NULL;
+    UINTN initrd_size = 0;
+    EFI_HANDLE initrd_handle = 0;
+
+    status = ReadFile(L"KERNEL.EFI", &kernel_device_path, &kernel_buffer, &kernel_size, EfiLoaderCode);
+    if (EFI_ERROR(status)) {
+        Print(L"ReadFile(KERNEL.EFI) failed: 0x%x\n", status);
+        return status;
+    }
+
+    status = ReadFile(L"INITRD.CPIO", &initrd_device_path, &initrd_buffer, &initrd_size, EfiLoaderData);
+    if (EFI_ERROR(status)) {
+        Print(L"ReadFile(INITRD.CPIO) failed: 0x%x\n", status);
+        return status;
+    }
+
+    CHAR16 *temp = ConvertDevicePathToText(kernel_device_path, TRUE, FALSE);
     Print(L"IMAGE PATH: %s\n", temp);
 
-    status = gBS->LoadImage(FALSE, gImageHandle, file_device_path, file_buffer, file_size, &image_handle);
+    status = gBS->LoadImage(FALSE, gImageHandle, kernel_device_path, kernel_buffer, kernel_size, &kernel_image_handle);
     if (EFI_ERROR(status)) {
         Print(L"LoadImage failed: 0x%x\n", status);
         return status;
     }
 
-    status = gBS->HandleProtocol(image_handle, &gEfiLoadedImageProtocolGuid, (VOID **) &loaded_image);
+    status = gBS->HandleProtocol(kernel_image_handle, &gEfiLoadedImageProtocolGuid, (VOID **) &loaded_image);
     if (EFI_ERROR(status)) {
         Print(L"HandleProtocol(gEfiLoadedImageProtocolGuid) failed: 0x%x\n", status);
         return status;
@@ -216,15 +272,24 @@ EFI_STATUS StartImage() {
 
     Print(L"loaded_image->DeviceHandle: %p\n", loaded_image->DeviceHandle);
     Print(L"loaded_image->FilePath: %p\n", loaded_image->FilePath);
+    Print(L"loaded_image->SystemTable: %p\n", loaded_image->SystemTable);
 
+    status = RegisterInitrd(initrd_buffer, initrd_size, &initrd_handle);
+    if (EFI_ERROR(status)) {
+        Print(L"RegisterInitrd failed: 0x%x\n", status);
+        return status;
+    }
 
     LOADED_KERNEL_CONTEXT ctx;
     PE_COFF_LOADER_IMAGE_CONTEXT pe_loader_context;
 
     ZeroMem(&ctx, sizeof(ctx));
     ctx.Signature = LOADED_KERNEL_CONTEXT_SIGNATURE;
-    ctx.Source = (VOID *) file_buffer;
-    ctx.SourceSize = file_size;
+    ctx.Source = (VOID *) kernel_buffer;
+    ctx.SourceSize = kernel_size;
+
+    ctx.loaded_image_handle = kernel_image_handle;
+    ctx.loaded_image_protocol = loaded_image;
 
     ZeroMem(&pe_loader_context, sizeof(pe_loader_context));
     pe_loader_context.Handle = (VOID *) &ctx;
@@ -341,7 +406,7 @@ EFI_STATUS StartImage() {
 
     CHAR16 *cmdline = CatSPrint(
             NULL,
-            L"nosmp earlyprintk=serial,ttyS1,115200 console=tty0 console=ttyS1,115200 acpi=off memmap=exactmap,128K@0M,%luM@%luM",
+            L"add_efi_memmap acpi=off nosmp earlyprintk=serial,ttyS1,115200 console=ttyS1 memmap=exactmap,128K@0M,%luM@%luM",
             linux_size >> 20,
             linux_addr >> 20
     );
@@ -352,11 +417,18 @@ EFI_STATUS StartImage() {
     Print(L"pe_loader_context.EntryPoint : 0x%p\n", pe_loader_context.EntryPoint);
 
     ctx.entrypoint = (EFI_IMAGE_ENTRY_POINT) (UINTN) pe_loader_context.EntryPoint;
-    ctx.loaded_image_handle = image_handle;
 
     status = gBS->CreateEvent(0, TPL_NOTIFY, NULL, NULL, &processor_event);
     if (EFI_ERROR(status)) {
         Print(L"CreateEvent failed: 0x%x\n", status);
+        return status;
+    }
+
+    ProxyServerInit(&m_proxy_server);
+
+    status = ProxyCreateStub(&ctx.loaded_image_protocol->SystemTable);
+    if (EFI_ERROR(status)) {
+        Print(L"ProxyCreateStub failed: 0x%x\n", status);
         return status;
     }
 
@@ -375,12 +447,19 @@ EFI_STATUS StartImage() {
         return status;
     }
     while (1) {
-        CpuPause();
+        BOOLEAN handled = ProxyHandle();
+        if (handled) {
+            Print(L"HANDLEDED!!!\n");
+        } else {
+            CpuPause();
+        }
     }
 
     UINTN index;
     status = gBS->WaitForEvent(1, &processor_event, &index);
     Print(L"WaitForEvent: 0x%x, index=%d\n", status, index);
+
+    (void) LoadedImageContextReadImageFile;
 
     return 0;
 }

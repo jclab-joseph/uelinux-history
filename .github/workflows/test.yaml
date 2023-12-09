@@ -10,11 +10,18 @@ jobs:
       - name: Install apt dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y tar git make gcc nasm mtools qemu-system-x86
+          sudo apt-get install -y tar git make gcc nasm mtools \
+          libasound2 libbrlapi0.8 libepoxy0 libgbm1 libglib2.0-0 libpixman-1-0 liburing2 libusb-1.0-0 acl \
+          libaio1 libbpf0 libfdt1 libfuse3-3 libjpeg8 liblzo2-2 libpmem1 libpng16-16 libslirp0 seabios ipxe-qemu ipxe-qemu-256k-compat-efi-roms libslirp0
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
+          lfs: true
+      - name: Install QEMU
+        run: |
+          cd test/packages
+          sudo dpkg -i qemu-system-common_8.0.4+dfsg-1ubuntu5_amd64.deb qemu-system-data_8.0.4+dfsg-1ubuntu5_all.deb qemu-system-x86_8.0.4+dfsg-1ubuntu5_amd64.deb
       - name: Build Base Tools
         run: |
           git submodule update --init
@@ -27,8 +34,10 @@ jobs:
           touch .tmp/report.md
           echo "<details>" >> .tmp/report.md
           echo "<summary>debug.log</summary>" >> .tmp/report.md
+          echo "" >> .tmp/report.md
           echo "\`\`\`" >> .tmp/report.md
           cat .tmp/debug.log >> .tmp/report.md
+          echo "" >> .tmp/report.md
           echo "\`\`\`" >> .tmp/report.md
           echo "</details>" >> .tmp/report.md
 
@@ -36,8 +45,10 @@ jobs:
 
           echo "<details>" >> .tmp/report.md
           echo "<summary>serial.log</summary>" >> .tmp/report.md
+          echo "" >> .tmp/report.md
           echo "\`\`\`" >> .tmp/report.md
           cat .tmp/serial.log >> .tmp/report.md
+          echo "" >> .tmp/report.md
           echo "\`\`\`" >> .tmp/report.md
           echo "</details>" >> .tmp/report.md
 
@@ -45,11 +56,22 @@ jobs:
 
           echo "<details>" >> .tmp/report.md
           echo "<summary>kern.log</summary>" >> .tmp/report.md
+          echo "" >> .tmp/report.md
           echo "\`\`\`" >> .tmp/report.md
           cat .tmp/kern.log >> .tmp/report.md
+          echo "" >> .tmp/report.md
           echo "\`\`\`" >> .tmp/report.md
           echo "</details>" >> .tmp/report.md
 
+      - name: Upload report
+        uses: actions/upload-artifact@v3
+        with:
+          name: report
+          path: |
+            .tmp/report.md
+            .tmp/debug.log
+            .tmp/serial.log
+            .tmp/kern.log
 
       - name: Create Comment
         id: comment
